@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mi Reproductor MP3</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Arial, sans-serif;
+      background: linear-gradient(135deg, #101828, #172554);
+      color: white;
+      display: flex;
+      justify-content: center;
+      padding: 30px 15px;
+    }
+    .app {
+      width: min(900px, 100%);
+      background: rgba(255,255,255,.08);
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 22px;
+      padding: 25px;
+      box-shadow: 0 20px 60px rgba(0,0,0,.35);
+      backdrop-filter: blur(12px);
+    }
+    h1 { margin: 0 0 6px; font-size: 30px; }
+    .sub { color: #cbd5e1; margin-bottom: 22px; }
+    .upload {
+      border: 2px dashed #64748b;
+      border-radius: 16px;
+      padding: 25px;
+      text-align: center;
+      cursor: pointer;
+      transition: .2s;
+      margin-bottom: 20px;
+    }
+    .upload:hover { border-color: #93c5fd; background: rgba(255,255,255,.05); }
+    .upload input { display: none; }
+    .upload strong { display: block; font-size: 18px; margin-bottom: 6px; }
+    .upload span { color: #cbd5e1; font-size: 14px; }
+    .now {
+      background: rgba(0,0,0,.2);
+      padding: 18px;
+      border-radius: 16px;
+      margin-bottom: 18px;
+    }
+    #currentTitle { font-weight: bold; margin-bottom: 10px; }
+    audio { width: 100%; }
+    .controls {
+      display: flex;
+      gap: 10px;
+      margin: 15px 0 20px;
+    }
+    button {
+      border: 0;
+      border-radius: 10px;
+      padding: 10px 16px;
+      cursor: pointer;
+      font-weight: bold;
+      background: #e2e8f0;
+      color: #0f172a;
+    }
+    button:hover { transform: translateY(-1px); }
+    .playlist { display: grid; gap: 9px; }
+    .song {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: rgba(255,255,255,.07);
+      cursor: pointer;
+    }
+    .song:hover { background: rgba(255,255,255,.13); }
+    .song.active { outline: 2px solid #93c5fd; }
+    .num { width: 28px; text-align: center; color: #94a3b8; }
+    .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+    .empty { color: #94a3b8; text-align: center; padding: 25px; }
+    .hint { margin-top: 18px; color: #94a3b8; font-size: 13px; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <h1>🎵 Mi Reproductor MP3</h1>
+    <div class="sub">Sube tus archivos MP3 y crea tu propia lista de reproducción.</div>
+
+    <label class="upload">
+      <input id="fileInput" type="file" accept=".mp3,audio/mpeg" multiple>
+      <strong>＋ Seleccionar archivos MP3</strong>
+      <span>Puedes seleccionar uno o varios archivos</span>
+    </label>
+
+    <section class="now">
+      <div id="currentTitle">Ninguna canción seleccionada</div>
+      <audio id="audio" controls preload="metadata"></audio>
+
+      <div class="controls">
+        <button id="prev">⏮ Anterior</button>
+        <button id="next">Siguiente ⏭</button>
+        <button id="clear">🗑 Limpiar lista</button>
+      </div>
+    </section>
+
+    <div id="playlist" class="playlist">
+      <div class="empty">Tu lista de reproducción aparecerá aquí.</div>
+    </div>
+
+    <div class="hint">
+      Los archivos seleccionados se reproducen directamente en tu navegador.
+      No se suben a ningún servidor. Si publicas esta página en GitHub Pages,
+      puedes incluir una carpeta <b>music/</b> con tus MP3 para que formen parte
+      de una biblioteca fija.
+    </div>
+  </main>
+
+<script>
+  const input = document.getElementById("fileInput");
+  const audio = document.getElementById("audio");
+  const playlist = document.getElementById("playlist");
+  const currentTitle = document.getElementById("currentTitle");
+  const prev = document.getElementById("prev");
+  const next = document.getElementById("next");
+  const clear = document.getElementById("clear");
+
+  let songs = [];
+  let current = -1;
+
+  input.addEventListener("change", () => {
+    const files = [...input.files].filter(f =>
+      f.type === "audio/mpeg" || f.name.toLowerCase().endsWith(".mp3")
+    );
+    songs.push(...files);
+    render();
+    if (current === -1 && songs.length) playSong(0);
+    input.value = "";
+  });
+
+  function playSong(index) {
+    if (!songs[index]) return;
+    current = index;
+    audio.src = URL.createObjectURL(songs[index]);
+    currentTitle.textContent = songs[index].name;
+    audio.play().catch(() => {});
+    render();
+  }
+
+  function render() {
+    if (!songs.length) {
+      playlist.innerHTML = '<div class="empty">Tu lista de reproducción aparecerá aquí.</div>';
+      return;
+    }
+    playlist.innerHTML = "";
+    songs.forEach((song, i) => {
+      const row = document.createElement("div");
+      row.className = "song" + (i === current ? " active" : "");
+      row.innerHTML = `
+        <div class="num">${i + 1}</div>
+        <div class="name">${escapeHtml(song.name)}</div>
+        <div>▶</div>
+      `;
+      row.addEventListener("click", () => playSong(i));
+      playlist.appendChild(row);
+    });
+  }
+
+  function escapeHtml(text) {
+    return text.replace(/[&<>"']/g, c => ({
+      "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#039;"
+    }[c]));
+  }
+
+  function move(step) {
+    if (!songs.length) return;
+    let index = current + step;
+    if (index < 0) index = songs.length - 1;
+    if (index >= songs.length) index = 0;
+    playSong(index);
+  }
+
+  prev.addEventListener("click", () => move(-1));
+  next.addEventListener("click", () => move(1));
+
+  audio.addEventListener("ended", () => move(1));
+
+  clear.addEventListener("click", () => {
+    audio.pause();
+    audio.removeAttribute("src");
+    audio.load();
+    songs = [];
+    current = -1;
+    currentTitle.textContent = "Ninguna canción seleccionada";
+    render();
+  });
+</script>
+</body>
+</html>
