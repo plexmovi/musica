@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mi Music Player</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#0b0b0f;color:#fff;font-family:Arial,sans-serif}
+.app{max-width:1100px;margin:auto;padding:24px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:25px}
+h1{margin:0;font-size:28px}.badge{background:#1db954;padding:7px 12px;border-radius:20px;font-size:12px;font-weight:bold}
+.hero{background:linear-gradient(135deg,#191923,#111116);border:1px solid #292934;border-radius:20px;padding:25px;display:grid;grid-template-columns:180px 1fr;gap:25px}
+.cover{width:180px;height:180px;border-radius:15px;object-fit:cover;background:#252530;display:flex;align-items:center;justify-content:center;font-size:65px}
+.info h2{font-size:28px;margin:20px 0 5px}.info p{color:#aaa;margin:0 0 20px}
+audio{width:100%;margin-top:15px}.buttons{display:flex;gap:10px;margin-top:15px}
+button{border:0;border-radius:10px;padding:11px 17px;font-weight:bold;cursor:pointer}button:hover{opacity:.85}
+.play{background:#1db954;color:#fff}.normal{background:#292934;color:#fff}
+.section{margin-top:25px}.section h3{margin-bottom:12px}.search{width:100%;padding:13px;border:1px solid #30303a;background:#17171e;color:white;border-radius:10px;margin-bottom:14px}
+.song{display:flex;align-items:center;gap:15px;padding:13px;border-radius:12px;cursor:pointer}.song:hover,.song.active{background:#1c1c25}.thumb{width:50px;height:50px;border-radius:8px;background:#252530;display:flex;align-items:center;justify-content:center;font-size:20px;overflow:hidden}.thumb img{width:100%;height:100%;object-fit:cover}.songinfo{flex:1;min-width:0}.songinfo b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.songinfo span{font-size:13px;color:#999}.empty{text-align:center;color:#888;padding:30px;border:1px dashed #333;border-radius:12px}
+@media(max-width:650px){.hero{grid-template-columns:1fr;text-align:center}.cover{margin:auto}.buttons{justify-content:center}.app{padding:15px}}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="top"><h1>🎵 Mi Music Player</h1><span class="badge">MP3 PLAYER</span></div>
+
+  <div class="hero">
+    <div id="cover" class="cover">🎵</div>
+    <div class="info">
+      <div style="color:#1db954;font-weight:bold">REPRODUCIENDO</div>
+      <h2 id="title">Selecciona una canción</h2>
+      <p id="artist">Tu biblioteca musical</p>
+      <audio id="audio" controls></audio>
+      <div class="buttons">
+        <button class="normal" onclick="previous()">⏮ Anterior</button>
+        <button class="play" onclick="togglePlay()">▶ Reproducir / Pausa</button>
+        <button class="normal" onclick="next()">Siguiente ⏭</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h3>🔎 Mi biblioteca</h3>
+    <input id="search" class="search" placeholder="Buscar canción o artista..." oninput="render()">
+    <div id="playlist"></div>
+  </div>
+</div>
+
+<script>
+// EDITA ESTA LISTA PARA AGREGAR TUS MP3.
+// Los archivos deben estar dentro de la carpeta "music/".
+// Las portadas son opcionales y pueden estar en "covers/".
+const songs = [
+  // {title:"amor de febrero", artist:"Jay Wheeler", file:"Amor De Febrero.mp3", cover:"https://i.postimg.cc/6qJrjFt9/amor-dfb.jpg"},
+  // {title:"Otra canción", artist:"Otro artista", file:"music/otra.mp3", cover:"covers/otra.jpg"},
+];
+
+const audio=document.getElementById("audio"), playlist=document.getElementById("playlist");
+const title=document.getElementById("title"), artist=document.getElementById("artist"), cover=document.getElementById("cover");
+let current=-1;
+
+function render(){
+  const q=document.getElementById("search").value.toLowerCase();
+  const list=songs.map((s,i)=>({...s,index:i})).filter(s=>
+    s.title.toLowerCase().includes(q)||s.artist.toLowerCase().includes(q));
+  if(!list.length){playlist.innerHTML='<div class="empty">No hay canciones todavía.<br><br>Agrega tus MP3 en la carpeta <b>music/</b> y configúralos en <b>index.html</b>.</div>';return;}
+  playlist.innerHTML=list.map(s=>`
+    <div class="song ${s.index===current?'active':''}" onclick="play(${s.index})">
+      <div class="thumb">${s.cover?`<img src="${s.cover}" alt="">`:'🎵'}</div>
+      <div class="songinfo"><b>${esc(s.title)}</b><span>${esc(s.artist)}</span></div>
+      <span>▶</span>
+    </div>`).join("");
+}
+function play(i){
+  if(!songs[i])return;
+  current=i; const s=songs[i]; audio.src=s.file; title.textContent=s.title; artist.textContent=s.artist;
+  cover.innerHTML=s.cover?`<img src="${s.cover}" style="width:100%;height:100%;object-fit:cover;border-radius:15px">`:"🎵";
+  audio.play().catch(()=>{});render();
+}
+function togglePlay(){if(!audio.src&&songs.length){play(0);return}audio.paused?audio.play():audio.pause()}
+function next(){if(songs.length)play((current+1)%songs.length)}
+function previous(){if(songs.length)play((current-1+songs.length)%songs.length)}
+audio.addEventListener("ended",next);
+function esc(x){return x.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]))}
+render();
+</script>
+</body>
+</html>
