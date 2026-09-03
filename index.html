@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chat Público</title>
+  <style>
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Arial,Helvetica,sans-serif;background:#0f172a;color:#fff;height:100vh;overflow:hidden}
+    .app{height:100vh;display:flex;flex-direction:column;max-width:1000px;margin:auto;background:#111827}
+    header{padding:14px 18px;background:#1e293b;border-bottom:1px solid #334155;display:flex;justify-content:space-between;align-items:center}
+    header h1{font-size:18px;margin:0}
+    #online{font-size:13px;color:#94a3b8}
+    #chat{flex:1;overflow-y:auto;padding:18px;display:flex;flex-direction:column;gap:10px;scroll-behavior:smooth}
+    .msg{max-width:80%;padding:9px 12px;border-radius:14px;background:#1e293b;word-wrap:break-word;animation:appear .2s ease}
+    .msg.me{align-self:flex-end;background:#2563eb}
+    .meta{font-size:11px;color:#94a3b8;margin-bottom:3px}
+    .me .meta{color:#dbeafe}
+    .text{font-size:15px;line-height:1.35}
+    .time{font-size:10px;opacity:.65;margin-left:7px}
+    .system{align-self:center;font-size:12px;color:#64748b;margin:4px}
+    footer{padding:12px;background:#1e293b;border-top:1px solid #334155}
+    form{display:flex;gap:8px}
+    input{flex:1;border:0;border-radius:12px;padding:13px;background:#0f172a;color:#fff;outline:none;font-size:15px}
+    button{border:0;border-radius:12px;padding:0 20px;background:#3b82f6;color:#fff;font-weight:bold;cursor:pointer}
+    button:hover{background:#2563eb}
+    #login{position:fixed;inset:0;background:#020617;display:flex;align-items:center;justify-content:center;padding:20px;z-index:5}
+    .card{width:min(420px,100%);background:#111827;padding:28px;border-radius:20px;box-shadow:0 20px 60px #0008}
+    .card h2{margin-top:0}
+    .card p{color:#94a3b8;line-height:1.5}
+    .card input{width:100%;margin:8px 0 12px}
+    .card button{width:100%;height:46px}
+    .hidden{display:none!important}
+    @keyframes appear{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  </style>
+</head>
+<body>
+<div id="login">
+  <div class="card">
+    <h2>💬 Chat Público</h2>
+    <p>Escribe cualquier nombre para entrar. No necesitas crear una cuenta.</p>
+    <input id="nameInput" maxlength="24" placeholder="Tu nombre" autocomplete="off">
+    <button id="enterBtn">Entrar al chat</button>
+  </div>
+</div>
+
+<div class="app">
+  <header>
+    <h1>🌐 Chat Público</h1>
+    <span id="online">Conectando…</span>
+  </header>
+  <main id="chat" aria-live="polite"></main>
+  <footer>
+    <form id="form">
+      <input id="messageInput" maxlength="500" placeholder="Escribe un mensaje…" autocomplete="off">
+      <button>Enviar</button>
+    </form>
+  </footer>
+</div>
+
+<script type="module">
+  // ============================================================
+  // CONFIGURACIÓN FIREBASE
+  // 1. Crea un proyecto en Firebase.
+  // 2. Activa Firestore Database.
+  // 3. Copia aquí la configuración de tu aplicación web.
+  // ============================================================
+  const firebaseConfig = {
+    apiKey: "PON_AQUI_TU_API_KEY",
+    authDomain: "PON_AQUI_TU_PROJECT.firebaseapp.com",
+    projectId: "PON_AQUI_TU_PROJECT_ID",
+    storageBucket: "PON_AQUI_TU_PROJECT.firebasestorage.app",
+    messagingSenderId: "PON_AQUI_TU_SENDER_ID",
+    appId: "PON_AQUI_TU_APP_ID"
+  };
+
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
+  import {
+    getFirestore, collection, addDoc, query, orderBy, limit,
+    onSnapshot, serverTimestamp
+  } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+
+  const login = document.getElementById("login");
+  const nameInput = document.getElementById("nameInput");
+  const enterBtn = document.getElementById("enterBtn");
+  const chat = document.getElementById("chat");
+  const form = document.getElementById("form");
+  const messageInput = document.getElementById("messageInput");
+  const online = document.getElementById("online");
+
+  let userName = localStorage.getItem("chatName") || "";
+  let unsubscribe = null;
+
+  // Cambia este valor para decidir cuántos mensajes se mantienen visibles.
+  const MAX_VISIBLE_MESSAGES = 60;
+
+  function escapeHTML(value){
+    return value.replace(/[&<>"']/g, c => ({
+      "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
+    }[c]));
+  }
+
+  function formatTime(ts){
+    if(!ts) return "";
+    const d = ts.toDate ? ts.toDate() : new Date(ts);
+    return d.toLocaleTimeString("es-DO",{hour:"2-digit",minute:"2-digit"});
+  }
+
+  function showMessage(data){
+    const el = document.createElement("div");
+    el.className = "msg" + (data.name === userName ? " me" : "");
+    el.innerHTML =
+      `<div class="meta">${escapeHTML(data.name || "Anónimo")}<span class="time">${formatTime(data.createdAt)}</span></div>` +
+      `<div class="text">${escapeHTML(data.text || "")}</div>`;
+    chat.appendChild(el);
+
+    while(chat.querySelectorAll(".msg").length > MAX_VISIBLE_MESSAGES){
+      chat.querySelector(".msg")?.remove();
+    }
+  }
+
+  async function startChat(){
+    const name = nameInput.value.trim().slice(0,24);
+    if(!name) return alert("Escribe un nombre.");
+    userName = name;
+    localStorage.setItem("chatName", userName);
+    login.classList.add("hidden");
+    messageInput.focus();
+
+    try{
+      const app = initializeApp(firebaseConfig);
+      const db = getFirestore(app);
+      const messagesRef = collection(db, "messages");
+      const q = query(messagesRef, orderBy("createdAt", "desc"), limit(MAX_VISIBLE_MESSAGES));
+
+      unsubscribe = onSnapshot(q, snapshot => {
+        chat.innerHTML = "";
+        const messages = [];
+        snapshot.forEach(doc => messages.push({id:doc.id,...doc.data()}));
+        messages.reverse().forEach(showMessage);
+        chat.scrollTop = chat.scrollHeight;
+        online.textContent = "● Chat en tiempo real";
+      }, err => {
+        console.error(err);
+        online.textContent = "Error de conexión";
+        alert("No se pudo conectar con Firebase. Revisa la configuración y las reglas de Firestore.");
+      });
+
+      form.onsubmit = async e => {
+        e.preventDefault();
+        const text = messageInput.value.trim();
+        if(!text) return;
+        messageInput.value = "";
+        try{
+          await addDoc(messagesRef, {
+            name:userName,
+            text:text,
+            createdAt:serverTimestamp()
+          });
+        }catch(err){
+          console.error(err);
+          alert("No se pudo enviar el mensaje.");
+        }
+      };
+    }catch(err){
+      console.error(err);
+      alert("Configura Firebase en este archivo antes de usar el chat.");
+    }
+  }
+
+  enterBtn.onclick = startChat;
+  nameInput.addEventListener("keydown", e => { if(e.key === "Enter") startChat(); });
+
+  if(userName){
+    nameInput.value = userName;
+  }
+
+  // Limpieza visual: cuando el usuario se desplaza hacia arriba,
+  // los mensajes que salen por arriba se eliminan del DOM.
+  chat.addEventListener("scroll", () => {
+    while(chat.scrollTop > 180){
+      const first = chat.querySelector(".msg");
+      if(!first) break;
+      first.remove();
+      chat.scrollTop -= first.offsetHeight + 10;
+    }
+  });
+</script>
+</body>
+</html>
